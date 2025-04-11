@@ -1,75 +1,39 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
-  runApp(MaterialApp(home: LoginScreen()));
-}
+void main() => runApp(MyApp());
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
-
+class MyApp extends StatelessWidget {
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Carros Eléctricos',
+      debugShowCheckedModeBanner: false,
+      home: LoginPage(),
+    );
+  }
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final _userController = TextEditingController();
-  final _passwordController = TextEditingController();
-  String _errorMessage = '';
-  bool _isLoading = false;
+class LoginPage extends StatefulWidget {
+  @override
+  _LoginPageState createState() => _LoginPageState();
+}
 
-  Future<void> _login() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
+class _LoginPageState extends State<LoginPage> {
+  final _userCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  String error = '';
 
-    final String username = _userController.text.trim();
-    final String password = _passwordController.text.trim();
-
-    if (username.isEmpty || password.isEmpty) {
-      setState(() {
-        _errorMessage = 'Ingrese usuario y contraseña';
-        _isLoading = false;
-      });
-      return;
-    }
-
-    const String apiUrl = 'https://carros-electricos.wiremockapi.cloud/auth';
-
-    try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'username': username, 'password': password}),
+  void _login() {
+    if (_userCtrl.text == 'admin' && _passCtrl.text == 'admin') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HomePage()),
       );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        String token = data['token'];
-
-        SharedPreferences prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', token);
-
-        // Navegar a la pantalla de lista de carros
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => CarListScreen()),
-        );
-      } else {
-        setState(() {
-          _errorMessage = 'Credenciales incorrectas';
-        });
-      }
-    } catch (e) {
+    } else {
       setState(() {
-        _errorMessage = 'Error de conexión';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
+        error = 'Usuario o contraseña incorrectos';
       });
     }
   }
@@ -77,121 +41,140 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: Text('Iniciar Sesión')),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('Sign In', style: TextStyle(fontSize: 24)),
-              SizedBox(height: 20),
-              TextField(
-                controller: _userController,
-                decoration: InputDecoration(labelText: 'User Name'),
-              ),
-              SizedBox(height: 16),
-              TextField(
-                controller: _passwordController,
-                decoration: InputDecoration(labelText: 'Password'),
-                obscureText: true,
-              ),
-              SizedBox(height: 10),
-              if (_errorMessage.isNotEmpty)
-                Text(_errorMessage, style: TextStyle(color: Colors.red)),
-              SizedBox(height: 20),
-              _isLoading
-                  ? CircularProgressIndicator()
-                  : ElevatedButton(onPressed: _login, child: Text('SIGN IN')),
-            ],
-          ),
+        padding: EdgeInsets.all(20),
+        child: Column(
+          children: [
+            TextField(controller: _userCtrl, decoration: InputDecoration(labelText: 'Usuario')),
+            TextField(controller: _passCtrl, decoration: InputDecoration(labelText: 'Contraseña'), obscureText: true),
+            SizedBox(height: 10),
+            ElevatedButton(onPressed: _login, child: Text('Ingresar')),
+            if (error.isNotEmpty) Text(error, style: TextStyle(color: Colors.red)),
+          ],
         ),
       ),
     );
   }
 }
 
-class CarListScreen extends StatefulWidget {
-  const CarListScreen({super.key});
-
+class HomePage extends StatefulWidget {
   @override
-  _CarListScreenState createState() => _CarListScreenState();
+  _HomePageState createState() => _HomePageState();
 }
 
-class _CarListScreenState extends State<CarListScreen> {
-  List<dynamic> _carros = [];
-  bool _isLoading = true;
-  String _errorMessage = '';
+class _HomePageState extends State<HomePage> {
+  List carros = [];
+  TextEditingController qrController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _fetchCarros();
+    fetchCarros();
   }
 
-  Future<void> _fetchCarros() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString('token');
-
-    const String apiUrl = 'https://carros-electricos.wiremockapi.cloud/carros';
-
-    try {
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: {'Authorization': token ?? ''},
-      );
-
-      if (response.statusCode == 200) {
-        setState(() {
-          _carros = json.decode(response.body);
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _errorMessage = 'Error al obtener los carros';
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
+  Future<void> fetchCarros() async {
+    final url = 'https://67f7d1812466325443eadd17.mockapi.io/carros';
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
       setState(() {
-        _errorMessage = 'Error de conexión';
-        _isLoading = false;
+        carros = json.decode(response.body);
       });
+    }
+  }
+
+  void buscarPorQR() {
+    final qr = qrController.text.trim();
+    if (qr.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => CarDetailPage(codigoQR: qr)),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Lista de Vehículos')),
-      body:
-          _isLoading
-              ? Center(child: CircularProgressIndicator())
-              : _errorMessage.isNotEmpty
-              ? Center(
-                child: Text(_errorMessage, style: TextStyle(color: Colors.red)),
-              )
-              : ListView.builder(
-                itemCount: _carros.length,
-                itemBuilder: (context, index) {
-                  return Card(
-                    margin: EdgeInsets.all(10),
-                    child: ListTile(
-                      leading: Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      title: Text('Placa: ${_carros[index]["placa"]}'),
-                      subtitle: Text(
-                        'Conductor: ${_carros[index]["conductor"]}',
-                      ),
-                    ),
-                  );
-                },
+      appBar: AppBar(title: Text('Mis Carros Eléctricos')),
+      body: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.all(10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: qrController,
+                    decoration: InputDecoration(labelText: 'Código QR'),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.search),
+                  onPressed: buscarPorQR,
+                )
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: carros.length,
+              itemBuilder: (context, index) {
+                final carro = carros[index];
+                return ListTile(
+                  title: Text(carro['modelo']),
+                  subtitle: Text('ID: ${carro['id']}'),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class CarDetailPage extends StatelessWidget {
+  final String codigoQR;
+  CarDetailPage({required this.codigoQR});
+
+  Future<Map<String, dynamic>?> fetchCarro() async {
+    final url = 'https://67f7d1812466325443eadd17.mockapi.io/carros/$codigoQR';
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Detalle del Carro')),
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: fetchCarro(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting)
+            return Center(child: CircularProgressIndicator());
+
+          if (snapshot.hasData) {
+            final carro = snapshot.data!;
+            return Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Modelo: ${carro['modelo']}', style: TextStyle(fontSize: 20)),
+                  Text('Color: ${carro['color']}'),
+                  Text('ID: ${carro['id']}'),
+                ],
               ),
+            );
+          } else {
+            return Center(child: Text('Carro no encontrado'));
+          }
+        },
+      ),
     );
   }
 }
